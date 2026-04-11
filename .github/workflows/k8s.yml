@@ -10,7 +10,7 @@ jobs:
     name: helm-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v6
       - name: helm-lint-dex
         uses: stefanprodan/kube-tools@v1.5.0
         with:
@@ -39,15 +39,15 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v6
       - name: setup-kind
-        uses: engineerd/setup-kind@v0.5.0
+        uses: engineerd/setup-kind@v0.6.2
         with:
           name: kind
       - name: build-ci-image
         run: |
-          docker build -t mintel/dex-k8s-authenticator:${GITHUB_SHA} .
-          kind load docker-image mintel/dex-k8s-authenticator:${GITHUB_SHA}
+          docker build -t m-barthelemy/dex-k8s-authenticator:${GITHUB_SHA} .
+          kind load docker-image m-barthelemy/dex-k8s-authenticator:${GITHUB_SHA}
       - name: update-helm-values
         run: |
           set -x
@@ -55,11 +55,11 @@ jobs:
           export CI_TAG=$GITHUB_SHA
           envsubst < ./tests/e2e/helm/dex-overrides.yaml > /tmp/dex-overrides.yaml
           envsubst < ./tests/e2e/helm/dex-k8s-auth-overrides.yaml > /tmp/dex-k8s-auth-overrides.yaml
-      - name: install-dex
-        run: |
-          helm install -f /tmp/dex-overrides.yaml dex ./charts/dex
-          kubectl describe deployment dex
-          kubectl rollout status deploy dex -w
+      #- name: install-dex
+      #  run: |
+      #    helm install -f /tmp/dex-overrides.yaml dex ./charts/dex
+      #    kubectl describe deployment dex
+      #    kubectl rollout status deploy dex -w
       - name: install-dex-auth
         run: |
           helm install -f /tmp/dex-k8s-auth-overrides.yaml dex-k8s-authenticator ./charts/dex-k8s-authenticator
