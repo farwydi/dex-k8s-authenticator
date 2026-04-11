@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -48,7 +47,10 @@ func (d debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	respDump, err := httputil.DumpResponse(resp, true)
 	if err != nil {
-		resp.Body.Close()
+		closeErr := resp.Body.Close()
+		if closeErr != nil {
+			log.Fatal(err)
+		}
 		return nil, err
 	}
 	log.Printf("%s", respDump)
@@ -103,7 +105,7 @@ func substituteEnvVars(text string) string {
 	matches := re.FindAllStringSubmatch(text, -1)
 	for _, val := range matches {
 		envVar := os.Getenv(val[1])
-		text = strings.Replace(text, val[0], envVar, -1)
+		text = strings.ReplaceAll(text, val[0], envVar)
 	}
 	return text
 }
@@ -139,7 +141,7 @@ func start_app(config Config) {
 	}
 	// Load CA certs from file
 	if config.Trusted_Root_Ca_File != "" {
-		content, err := ioutil.ReadFile(config.Trusted_Root_Ca_File)
+		content, err := os.ReadFile(config.Trusted_Root_Ca_File)
 		if err != nil {
 			log.Fatalf("Failed to read file Trusted Root CA %s, %v", config.Trusted_Root_Ca_File, err)
 		}
@@ -241,7 +243,7 @@ func start_app(config Config) {
 		}
 
 		if cluster.K8s_Ca_Pem_File != "" {
-			content, err := ioutil.ReadFile(cluster.K8s_Ca_Pem_File)
+			content, err := os.ReadFile(cluster.K8s_Ca_Pem_File)
 			if err != nil {
 				log.Fatalf("Failed to load CA from file %s, %s", cluster.K8s_Ca_Pem_File, err)
 			}
@@ -393,7 +395,7 @@ func initConfig() {
 		viper.AddConfigPath(path)
 		viper.SetDefault("web_path_prefix", "/")
 
-		config, err := ioutil.ReadFile(config_file)
+		config, err := os.ReadFile(config_file)
 		if err != nil {
 			log.Fatalf("Error reading config file, %s", err)
 		}
