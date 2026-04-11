@@ -13,7 +13,9 @@ COPY . .
 
 RUN make build
 
-FROM alpine:latest
+
+# Docker hardened image
+FROM dhi.io/alpine-base:3.23-dev
 
 # Dex connectors, such as GitHub and Google logins require root certificates.
 # Proper installations should manage those certificates, but it's a bad user
