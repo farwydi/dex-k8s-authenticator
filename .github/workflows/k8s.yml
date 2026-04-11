@@ -55,11 +55,11 @@ jobs:
           export CI_TAG=$GITHUB_SHA
           envsubst < ./tests/e2e/helm/dex-overrides.yaml > /tmp/dex-overrides.yaml
           envsubst < ./tests/e2e/helm/dex-k8s-auth-overrides.yaml > /tmp/dex-k8s-auth-overrides.yaml
-      - name: install-dex
-        run: |
-          helm install -f /tmp/dex-overrides.yaml dex ./charts/dex
-          kubectl describe deployment dex
-          kubectl rollout status deploy dex -w
+      #- name: install-dex
+      #  run: |
+      #    helm install -f /tmp/dex-overrides.yaml dex ./charts/dex
+      #    kubectl describe deployment dex
+      #    kubectl rollout status deploy dex -w
       - name: install-dex-auth
         run: |
           helm install -f /tmp/dex-k8s-auth-overrides.yaml dex-k8s-authenticator ./charts/dex-k8s-authenticator
