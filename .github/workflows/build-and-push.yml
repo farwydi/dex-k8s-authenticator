@@ -5,6 +5,10 @@ on:
   push:
     tags: 
       - '*'
+    branches:
+      - master
+      - main
+      - test
 
 # dockerhub repo here
 env:
