@@ -10,7 +10,7 @@ jobs:
     name: helm-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v6
       - name: helm-lint-dex
         uses: stefanprodan/kube-tools@v1.5.0
         with:
@@ -39,9 +39,9 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v6
       - name: setup-kind
-        uses: engineerd/setup-kind@v0.5.0
+        uses: engineerd/setup-kind@v0.6.2
         with:
           name: kind
       - name: build-ci-image
