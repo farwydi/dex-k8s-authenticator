@@ -10,8 +10,10 @@ An example configuration is available [here](../examples/config.yaml)
 | name                      | yes      | cluster | Internal id of cluster                                                                |
 | short_description         | yes      | cluster | Short description of cluster                                                          |
 | description               | yes      | cluster | Extended description of cluster                                                       |
-| client_secret             | yes      | cluster | OAuth2 client-secret (shared between dex-k8s-auth and dex)                            |
+| client_secret             | no       | cluster | OAuth2 client-secret (shared between dex-k8s-auth and dex). Omit when using a public client with PKCE. |
 | client_id                 | yes      | cluster | OAuth2 client-id public identifier (shared between dex-k8s-auth and dex)              |
+| client_type               | no       | cluster | OAuth2 client type: `confidential` (default) or `public`. Setting `public` enables PKCE and makes `client_secret` optional. |
+| pkce                      | no       | cluster | Enable PKCE (RFC 7636, S256) on the authorization-code flow. Auto-enabled when `client_type: public`. |
 | connector_id              | no       | cluster | Dex connector ID to use by default omitting other available connectors                |
 | issuer                    | yes      | cluster | Dex issuer url                                                                        |
 | redirect_uri              | yes      | cluster | Redirect uri called by dex (defines a callback on dex-k8s-auth)                       |
@@ -75,6 +77,33 @@ web_path_prefix: /dex-auth
 ```
 
 Don't forget to update the Dex `staticClients.redirectURIs` value to include the prefix as well.
+
+## Public clients (PKCE)
+
+Modern IdPs such as authentik or strict Keycloak realms favour public OAuth2
+clients combined with PKCE (RFC 7636, S256) instead of distributing a
+`client_secret`. To configure dex-k8s-authenticator as a public client,
+omit `client_secret` and set `client_type: public` (or `pkce: true`):
+
+```yaml
+clusters:
+  - name: example-cluster
+    short_description: "Example Cluster"
+    description: "Example Cluster Long Description..."
+    client_id: kubernetes
+    client_type: public
+    issuer: https://auth.example.com/application/o/kubernetes/
+    redirect_uri: https://kubeconfig.example.com/callback/example-cluster
+    scopes:
+      - openid
+      - email
+      - profile
+      - offline_access
+```
+
+Confidential clients with `client_secret` continue to work without changes.
+The startup will fail fast if `client_secret` is empty and PKCE is not
+enabled.
 
 ### Helm
 

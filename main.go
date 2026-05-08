@@ -74,6 +74,8 @@ type Cluster struct {
 	K8s_Ca_Pem_Base64_Encoded string
 	Static_Context_Name       bool
 	Scopes                    []string
+	Client_Type               string
+	PKCE                      bool
 
 	Verifier       *oidc.IDTokenVerifier
 	Provider       *oidc.Provider
@@ -81,6 +83,7 @@ type Cluster struct {
 	Client         *http.Client
 	Redirect_URI   string
 	Config         Config
+	Sessions       *loginSessionStore
 }
 
 // Define our configuration
@@ -189,6 +192,25 @@ func start_app(config Config) {
 	// Generate handlers for each cluster
 	for i := range config.Clusters {
 		cluster := config.Clusters[i]
+
+		// Public clients use PKCE instead of a client_secret. We accept
+		// either an explicit `client_type: public` or the bare `pkce: true`
+		// flag, and also auto-enable PKCE when no secret is configured so
+		// the common case "I just dropped the secret" works without extra
+		// boilerplate.
+		switch strings.ToLower(strings.TrimSpace(cluster.Client_Type)) {
+		case "public":
+			cluster.PKCE = true
+		case "", "confidential":
+			// keep cluster.PKCE as-is
+		default:
+			log.Fatalf("cluster %q: invalid client_type %q (expected \"public\" or \"confidential\")", cluster.Name, cluster.Client_Type)
+		}
+		if cluster.Client_Secret == "" && !cluster.PKCE {
+			log.Fatalf("cluster %q: client_secret is empty and PKCE is not enabled; set client_secret, or set client_type: public / pkce: true", cluster.Name)
+		}
+		cluster.Sessions = newLoginSessionStore()
+
 		if debug {
 			if cluster.Client == nil {
 				cluster.Client = &http.Client{
