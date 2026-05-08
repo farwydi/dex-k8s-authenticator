@@ -1,6 +1,6 @@
 image:
-  repository: m-barthelemy/dex-k8s-authenticator
-  tag: ${CI_TAG}
+  repository: dex-k8s-authenticator
+  tag: ${CI_TAG}-amd64
   pullPolicy: Never
 
 service:

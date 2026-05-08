@@ -3,12 +3,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/bytedance/sonic"
 )
 
 // compile all templates and cache them
@@ -57,7 +58,7 @@ func (cluster *Cluster) renderToken(w http.ResponseWriter,
 	claims []byte) {
 
 	var data map[string]interface{}
-	err := json.Unmarshal(claims, &data)
+	err := sonic.Unmarshal(claims, &data)
 	if err != nil {
 		panic(err)
 	}

@@ -17,6 +17,8 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/spf13/cast"
@@ -77,13 +79,50 @@ type Cluster struct {
 	Client_Type               string
 	PKCE                      bool
 
-	Verifier       *oidc.IDTokenVerifier
-	Provider       *oidc.Provider
+	verifier       atomic.Pointer[oidc.IDTokenVerifier]
+	provider       atomic.Pointer[oidc.Provider]
 	OfflineAsScope bool
 	Client         *http.Client
 	Redirect_URI   string
 	Config         Config
 	Sessions       *loginSessionStore
+}
+
+func (c *Cluster) Provider() *oidc.Provider       { return c.provider.Load() }
+func (c *Cluster) Verifier() *oidc.IDTokenVerifier { return c.verifier.Load() }
+
+func (c *Cluster) discoverProvider() {
+	ctx := oidc.ClientContext(context.Background(), c.Client)
+	backoff := time.Second
+	for {
+		log.Printf("Creating new provider %s", c.Issuer)
+		provider, err := oidc.NewProvider(ctx, c.Issuer)
+		if err == nil {
+			log.Printf("Verifying client %s", c.Client_ID)
+			c.provider.Store(provider)
+			c.verifier.Store(provider.Verifier(&oidc.Config{ClientID: c.Client_ID}))
+			var s struct {
+				ScopesSupported []string `json:"scopes_supported"`
+			}
+			c.OfflineAsScope = true
+			if err := provider.Claims(&s); err == nil && len(s.ScopesSupported) > 0 {
+				offline := false
+				for _, scope := range s.ScopesSupported {
+					if scope == oidc.ScopeOfflineAccess {
+						offline = true
+						break
+					}
+				}
+				c.OfflineAsScope = offline
+			}
+			return
+		}
+		log.Printf("Failed to query provider %q: %v (retrying in %s)", c.Issuer, err, backoff)
+		time.Sleep(backoff)
+		if backoff < 30*time.Second {
+			backoff *= 2
+		}
+	}
 }
 
 // Define our configuration
@@ -123,10 +162,6 @@ func start_app(config Config) {
 	listenURL, err := url.Parse(config.Listen)
 	if err != nil {
 		log.Fatalf("parse listen address: %v", err)
-	}
-
-	var s struct {
-		ScopesSupported []string `json:"scopes_supported"`
 	}
 
 	certp, err := x509.SystemCertPool()
@@ -191,7 +226,7 @@ func start_app(config Config) {
 
 	// Generate handlers for each cluster
 	for i := range config.Clusters {
-		cluster := config.Clusters[i]
+		cluster := &config.Clusters[i]
 
 		// Public clients use PKCE instead of a client_secret. We accept
 		// either an explicit `client_type: public` or the bare `pkce: true`
@@ -223,42 +258,10 @@ func start_app(config Config) {
 			cluster.Client = &http.Client{Transport: tr}
 		}
 
-		ctx := oidc.ClientContext(context.Background(), cluster.Client)
-		log.Printf("Creating new provider %s", cluster.Issuer)
-		provider, err := oidc.NewProvider(ctx, cluster.Issuer)
-
-		if err != nil {
-			log.Fatalf("Failed to query provider %q: %v\n", cluster.Issuer, err)
-		}
-
-		cluster.Provider = provider
-
-		log.Printf("Verifying client %s", cluster.Client_ID)
-
-		verifier := provider.Verifier(&oidc.Config{ClientID: cluster.Client_ID})
-
-		cluster.Verifier = verifier
-
-		if err := provider.Claims(&s); err != nil {
-			log.Fatalf("Failed to parse provider scopes_supported: %v", err)
-		}
-
-		if len(s.ScopesSupported) == 0 {
-			// scopes_supported is a "RECOMMENDED" discovery claim, not a required
-			// one. If missing, assume that the provider follows the spec and has
-			// an "offline_access" scope.
-			cluster.OfflineAsScope = true
-		} else {
-			// See if scopes_supported has the "offline_access" scope.
-			cluster.OfflineAsScope = func() bool {
-				for _, scope := range s.ScopesSupported {
-					if scope == oidc.ScopeOfflineAccess {
-						return true
-					}
-				}
-				return false
-			}()
-		}
+		// Resolve the OIDC provider in the background with retry/backoff so the
+		// process becomes ready even if the issuer is temporarily unreachable.
+		// Handlers reject requests with 503 until discovery succeeds.
+		go cluster.discoverProvider()
 
 		if len(cluster.Scopes) == 0 {
 			cluster.Scopes = []string{"openid", "profile", "email", "offline_access", "groups"}
@@ -343,6 +346,9 @@ func substituteEnvVarsRecursive(copy, original reflect.Value) {
 
 	case reflect.Struct:
 		for i := 0; i < original.NumField(); i += 1 {
+			if !original.Type().Field(i).IsExported() {
+				continue
+			}
 			substituteEnvVarsRecursive(copy.Field(i), original.Field(i))
 		}
 

@@ -44,10 +44,17 @@ jobs:
         uses: engineerd/setup-kind@v0.6.2
         with:
           name: kind
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: install-melange-apko
+        run: |
+          go install chainguard.dev/melange@latest
+          go install chainguard.dev/apko@latest
       - name: build-ci-image
         run: |
-          docker build -t m-barthelemy/dex-k8s-authenticator:${GITHUB_SHA} .
-          kind load docker-image m-barthelemy/dex-k8s-authenticator:${GITHUB_SHA}
+          make image TAG=${GITHUB_SHA} RUNNER=docker
+          kind load image-archive dex-k8s-authenticator.tar --name kind
       - name: update-helm-values
         run: |
           set -x
@@ -67,6 +74,10 @@ jobs:
           kubectl rollout status deploy dex-k8s-authenticator -w
       - name: test
         run: |
-            kubectl get pods 
+            kubectl get pods
             export NODE_IP=$(kubectl get nodes -o jsonpath="{.items[0].status.addresses[0].address}")
-            curl -Lsf "http://${NODE_IP}:30000/login/my-cluster" | grep "Log in to Your Account"
+            for i in $(seq 1 10); do
+              curl -Lsf "http://${NODE_IP}:30000" | grep "Generate Kubernetes Token" && exit 0
+              sleep 2
+            done
+            exit 1

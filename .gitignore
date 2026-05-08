@@ -2,3 +2,7 @@
 bin
 ./idea
 *.iml
+packages/
+melange.rsa
+melange.rsa.pub
+*.tar
