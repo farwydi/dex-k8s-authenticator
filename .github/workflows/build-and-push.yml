@@ -32,8 +32,9 @@ jobs:
 
       - name: Install apko
         run: |
-          curl -fsSL https://github.com/chainguard-dev/apko/releases/latest/download/apko_linux_amd64 -o /usr/local/bin/apko
-          chmod +x /usr/local/bin/apko
+          gh release download --repo chainguard-dev/apko --pattern 'apko_*_linux_amd64.tar.gz' --output - | tar -xz -C /usr/local/bin apko
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate signing key
         run: melange keygen
