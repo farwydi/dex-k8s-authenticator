@@ -15,14 +15,18 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const exampleAppState = "Vgn2lp5QnymFtLntKX5dM8k773PwcM87T4hQtiESC1q8wkUBgw5D3kH0r5qJ"
-
 func (cluster *Cluster) oauth2Config() *oauth2.Config {
-
+	endpoint := cluster.Provider.Endpoint()
+	// Public clients (no secret) must send credentials in the request body
+	// per RFC 6749 §2.3.1; some IdPs reject the otherwise auto-detected
+	// HTTP Basic header when its password component is empty.
+	if cluster.PKCE && cluster.Client_Secret == "" {
+		endpoint.AuthStyle = oauth2.AuthStyleInParams
+	}
 	return &oauth2.Config{
 		ClientID:     cluster.Client_ID,
 		ClientSecret: cluster.Client_Secret,
-		Endpoint:     cluster.Provider.Endpoint(),
+		Endpoint:     endpoint,
 		Scopes:       cluster.Scopes,
 		RedirectURL:  cluster.Redirect_URI,
 	}
@@ -39,12 +43,21 @@ func (config *Config) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (cluster *Cluster) handleLogin(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Handling login-uri for: %s", cluster.Name)
-	authCodeURL := cluster.oauth2Config().AuthCodeURL(exampleAppState, oauth2.AccessTypeOffline)
+
+	state := generateState()
+	authOpts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
+	if cluster.PKCE {
+		verifier := oauth2.GenerateVerifier()
+		cluster.Sessions.put(state, verifier)
+		authOpts = append(authOpts, oauth2.S256ChallengeOption(verifier))
+	}
+
+	authCodeURL := cluster.oauth2Config().AuthCodeURL(state, authOpts...)
 	if cluster.Connector_ID != "" {
 		log.Printf("Using dex connector with id %#q", cluster.Connector_ID)
 		authCodeURL = fmt.Sprintf("%s&connector_id=%s", authCodeURL, cluster.Connector_ID)
 	}
-	log.Printf("Redirecting post-loginto: %s", authCodeURL)
+	log.Printf("Redirecting post-login to: %s", authCodeURL)
 	http.Redirect(w, r, authCodeURL, http.StatusSeeOther)
 }
 
@@ -76,12 +89,24 @@ func (cluster *Cluster) handleCallback(w http.ResponseWriter, r *http.Request) {
 			log.Printf("handleCallback: no code in request: %q", r.Form)
 			return
 		}
-		if state := r.FormValue("state"); state != exampleAppState {
+		state := r.FormValue("state")
+		if state == "" {
 			cluster.renderHTMLError(w, userErrorMsg, http.StatusBadRequest)
-			log.Printf("handleCallback: expected state %q got %q", exampleAppState, state)
+			log.Printf("handleCallback: missing state in callback")
 			return
 		}
-		token, err = oauth2Config.Exchange(ctx, code)
+
+		exchangeOpts := []oauth2.AuthCodeOption{}
+		if cluster.PKCE {
+			verifier, ok := cluster.Sessions.take(state)
+			if !ok {
+				cluster.renderHTMLError(w, userErrorMsg, http.StatusBadRequest)
+				log.Printf("handleCallback: unknown or expired state %q", state)
+				return
+			}
+			exchangeOpts = append(exchangeOpts, oauth2.VerifierOption(verifier))
+		}
+		token, err = oauth2Config.Exchange(ctx, code, exchangeOpts...)
 	case "POST":
 		// Form request from frontend to refresh a token.
 		refresh := r.FormValue("refresh_token")
