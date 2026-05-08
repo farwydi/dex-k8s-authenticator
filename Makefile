@@ -2,6 +2,7 @@ GOBIN=$(shell pwd)/bin
 GOFILES=$(wildcard *.go)
 GONAME=dex-k8s-authenticator
 TAG=latest
+REGISTRY_IMAGE?=ghcr.io/farwydi/dex-k8s-authenticator
 ARCH?=$(shell go env GOARCH)
 RUNNER?=bubblewrap
 PACKAGES_DIR=packages
@@ -36,6 +37,14 @@ image: melange-build
 .PHONY: image-load
 image-load: image
 	docker load < $(GONAME).tar
+
+.PHONY: image-push
+image-push: melange-build
+	apko publish apko.yaml \
+		$(REGISTRY_IMAGE):$(TAG) \
+		--arch $(ARCH) \
+		--keyring-append melange.rsa.pub \
+		--repository-append $(shell pwd)/$(PACKAGES_DIR)
 
 .PHONY: clean
 clean:

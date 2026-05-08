@@ -1,42 +1,39 @@
-name: "Build and Push on new git tag"
+name: "Build and Push OCI Image"
 
-# runs on every new git tag
 on:
   push:
-    tags: 
-      - '*'
-    branches:
-      - master
-      - main
-      - test
+    tags:
+      - 'v*'
 
-# dockerhub repo here
 env:
-  REGISTRY_IMAGE: mbarthelemy/dex-k8s-authenticator
+  REGISTRY: ghcr.io
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  docker:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v6
         with:
-          # list of Docker images to use as base name for tags
-          images: |
-            ${{ env.REGISTRY_IMAGE }}
-          # generate Docker tags based on the following events/attributes
+          images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - name: Login to Docker Hub
+
+      - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -50,4 +47,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-
