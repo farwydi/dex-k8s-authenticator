@@ -1,9 +1,9 @@
-GOBIN=$(shell pwd)/bin
+GOBIN=.
 GOFILES=$(wildcard *.go)
 GONAME=dex-k8s-authenticator
 TAG=latest
 
-all: build 
+all: build
 
 .PHONY: build
 build:
@@ -19,6 +19,7 @@ clean:
 	@echo "Cleaning"
 	GOBIN=$(GOBIN) go clean
 	rm -rf ./bin
+
 
 .PHONY: lint
 lint:
