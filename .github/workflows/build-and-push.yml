@@ -32,7 +32,7 @@ jobs:
 
       - name: Install apko
         run: |
-          gh release download --repo chainguard-dev/apko --pattern 'apko_*_linux_amd64.tar.gz' --output - | tar -xz -C /usr/local/bin apko
+          gh release download --repo chainguard-dev/apko --pattern 'apko_*_linux_amd64.tar.gz' --output - | tar -xz --strip-components=1 -C /usr/local/bin
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
