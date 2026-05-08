@@ -16,7 +16,11 @@ import (
 )
 
 func (cluster *Cluster) oauth2Config() *oauth2.Config {
-	endpoint := cluster.Provider.Endpoint()
+	provider := cluster.Provider()
+	if provider == nil {
+		return nil
+	}
+	endpoint := provider.Endpoint()
 	// Public clients (no secret) must send credentials in the request body
 	// per RFC 6749 §2.3.1; some IdPs reject the otherwise auto-detected
 	// HTTP Basic header when its password component is empty.
@@ -44,6 +48,13 @@ func (config *Config) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (cluster *Cluster) handleLogin(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Handling login-uri for: %s", cluster.Name)
 
+	cfg := cluster.oauth2Config()
+	if cfg == nil {
+		cluster.renderHTMLError(w, "Identity provider not ready, please retry shortly", http.StatusServiceUnavailable)
+		log.Printf("handleLogin: OIDC provider for %q not initialized yet", cluster.Name)
+		return
+	}
+
 	state := generateState()
 	authOpts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
 	if cluster.PKCE {
@@ -52,7 +63,7 @@ func (cluster *Cluster) handleLogin(w http.ResponseWriter, r *http.Request) {
 		authOpts = append(authOpts, oauth2.S256ChallengeOption(verifier))
 	}
 
-	authCodeURL := cluster.oauth2Config().AuthCodeURL(state, authOpts...)
+	authCodeURL := cfg.AuthCodeURL(state, authOpts...)
 	if cluster.Connector_ID != "" {
 		log.Printf("Using dex connector with id %#q", cluster.Connector_ID)
 		authCodeURL = fmt.Sprintf("%s&connector_id=%s", authCodeURL, cluster.Connector_ID)
@@ -75,6 +86,12 @@ func (cluster *Cluster) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	ctx := oidc.ClientContext(r.Context(), cluster.Client)
 	oauth2Config := cluster.oauth2Config()
+	verifier := cluster.Verifier()
+	if oauth2Config == nil || verifier == nil {
+		cluster.renderHTMLError(w, "Identity provider not ready, please retry shortly", http.StatusServiceUnavailable)
+		log.Printf("handleCallback: OIDC provider for %q not initialized yet", cluster.Name)
+		return
+	}
 	switch r.Method {
 	case "GET":
 		// Authorization redirect callback from OAuth2 auth flow.
@@ -139,7 +156,7 @@ func (cluster *Cluster) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idToken, err := cluster.Verifier.Verify(r.Context(), rawIDToken)
+	idToken, err := verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		cluster.renderHTMLError(w, userErrorMsg, http.StatusBadRequest)
 		log.Printf("handleCallback: failed to verify ID token: %q, err: %v", rawIDToken, err)
