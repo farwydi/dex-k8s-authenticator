@@ -38,7 +38,7 @@ func (cluster *Cluster) oauth2Config() *oauth2.Config {
 
 func (config *Config) handleIndex(w http.ResponseWriter, r *http.Request) {
 
-	if len(config.Clusters) == 1 && r.URL.String() == config.Web_Path_Prefix {
+	if len(config.Clusters) == 1 && r.URL.String() == config.Web_Path_Prefix && config.Clusters[0].Provider() != nil {
 		http.Redirect(w, r, path.Join(config.Web_Path_Prefix, "login", config.Clusters[0].Name), http.StatusSeeOther)
 	} else {
 		renderIndex(w, config)
