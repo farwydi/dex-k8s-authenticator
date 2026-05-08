@@ -30,8 +30,10 @@ jobs:
       - name: Setup melange
         uses: chainguard-dev/actions/setup-melange@main
 
-      - name: Setup apko
-        uses: chainguard-dev/actions/setup-apko@main
+      - name: Install apko
+        run: |
+          curl -fsSL https://github.com/chainguard-dev/apko/releases/latest/download/apko_linux_amd64 -o /usr/local/bin/apko
+          chmod +x /usr/local/bin/apko
 
       - name: Generate signing key
         run: melange keygen
