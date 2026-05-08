@@ -3,6 +3,7 @@ GOFILES=$(wildcard *.go)
 GONAME=dex-k8s-authenticator
 TAG=latest
 ARCH?=$(shell go env GOARCH)
+RUNNER?=bubblewrap
 PACKAGES_DIR=packages
 
 all: build
@@ -21,7 +22,8 @@ melange-build: melange-keygen
 	melange build melange.yaml \
 		--arch $(ARCH) \
 		--signing-key melange.rsa \
-		--out-dir $(PACKAGES_DIR)
+		--out-dir $(PACKAGES_DIR) \
+		--runner $(RUNNER)
 
 .PHONY: image
 image: melange-build

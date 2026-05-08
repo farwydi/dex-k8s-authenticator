@@ -53,7 +53,7 @@ jobs:
           go install chainguard.dev/apko@latest
       - name: build-ci-image
         run: |
-          make image TAG=${GITHUB_SHA}
+          make image TAG=${GITHUB_SHA} RUNNER=docker
           kind load image-archive dex-k8s-authenticator.tar --name kind
       - name: update-helm-values
         run: |
