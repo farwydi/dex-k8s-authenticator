@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/spf13/cast"
 	"golang.org/x/oauth2"
@@ -152,12 +152,17 @@ func (cluster *Cluster) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	buff := new(bytes.Buffer)
-	if err = json.Indent(buff, []byte(claims), "", "  "); err != nil {
+	var claimsObj interface{}
+	if err = sonic.Unmarshal([]byte(claims), &claimsObj); err != nil {
+		cluster.renderHTMLError(w, userErrorMsg, http.StatusBadRequest)
+		log.Printf("handleCallback: failed to parse claims json: %v", err)
+		return
+	}
+	indentedClaims, err := sonic.ConfigStd.MarshalIndent(claimsObj, "", "  ")
+	if err != nil {
 		cluster.renderHTMLError(w, userErrorMsg, http.StatusBadRequest)
 		log.Printf("handleCallback: failed to indent json:  %v", err)
 		return
-
 	}
 
 	if cluster.Config.IDP_Ca_Pem != "" {
@@ -176,5 +181,5 @@ func (cluster *Cluster) handleCallback(w http.ResponseWriter, r *http.Request) {
 		cluster.Config.Logo_Uri,
 		cluster.Config.Web_Path_Prefix,
 		cluster.Config.Kubectl_Version,
-		buff.Bytes())
+		indentedClaims)
 }
